@@ -101,10 +101,13 @@ def M_new(N,r,Delta_r,rho):
 #------------------------------------------------------------------------------
 def L_new(N,r,nu,p,sigma,Delta_r,G = 4.302e-06,a = (16/np.pi)**(1/2),b = (25 * (np.pi)**(1/2) )/32,C = 290/385):
     L = np.zeros(N)
-    for i in range(N-1):
+    for i in range(N):
         term_1 = -12 * np.pi * r[i]**2 * nu[i]**2 * a * b * sigma
         term_2 = ( a*sigma**2 + (b/C) * (4*np.pi*G)/(p[i]) )**(-1)
-        term_3 = deriv(nu[i],nu[i+1],Delta_r[i])
+        if i<N-1:
+            term_3 = deriv(nu[i],nu[i+1],Delta_r[i])
+        else:
+            term_3 = deriv(nu[i],0,Delta_r[i])   
         L[i] = term_1 * term_2 * term_3
     return L
 
@@ -157,7 +160,7 @@ sigma = 3*sigma_convert # Essig pg. 2
 
 # Discretize halo and initialize quantities
 #------------------------------------------------------------------------------
-N = 150 # Nishikawa pg. 5
+N = 100
 s = np.logspace(-2,3,N+1) * r_s # Essig pg. 7
 r = []
 Delta_r = []
@@ -174,7 +177,7 @@ nu = [nu_NFW (x,r_s,rho_s) for x in r]
 # Time evolve quantities
 #------------------------------------------------------------------------------
 y_0 = np.concatenate((rho,u,nu))
-t = np.linspace(0,0.1,10)
+t = np.linspace(0,1,100)
 y = odeint(dy_dt,y_0,t,args=(N,r,Delta_r))
 
 print(y[-1][:N]) # final rho values
