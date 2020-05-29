@@ -139,6 +139,7 @@ for i in range(N):
 L_vals=[]
 for i in range(N-1):
     L_vals.append( L_new(r_vals[i],nu_vals[i],nu_vals[i+1],p_vals[i],sigma,Delta_r_vals[i]) )
+L_vals.append(0)
     
 
 # Time evolve quantities
@@ -150,7 +151,16 @@ for i in range (N):
 epsilon_t = 1e-4
 Delta_t = min(t_r_vals) * epsilon_t
 print(Delta_t)
-    
+
+for i in range(N):
+    if i<N-1:
+        rho_vals[i] = rho_vals[i] + Delta_rho(Delta_t,rho_vals[i],rho_vals[i+1],u_vals[i],u_vals[i+1],Delta_r_vals[i],r_vals[i])
+        u_vals[i] = u_vals[i] + Delta_u(Delta_t,u_vals[i],u_vals[i+1],Delta_r_vals[i],M_vals[i],r_vals[i],rho_vals[i],p_vals[i],p_vals[i+1])
+        nu_vals[i] = nu_vals[i] + Delat_nu(Delta_t,nu_vals[i],nu_vals[i+1],r_vals[i],p_vals[i],L_vals[i],L_vals[i+1],Delta_r_vals[i],u_vals[i],u_vals[i+1]) 
+    else:
+        rho_vals[i] = rho_vals[i] + Delta_rho(Delta_t,rho_vals[i],0,u_vals[i],0,Delta_r_vals[i],r_vals[i])
+        u_vals[i] = u_vals[i] + Delta_u(Delta_t,u_vals[i],0,Delta_r_vals[i],M_vals[i],r_vals[i],rho_vals[i],p_vals[i],0)
+        nu_vals[i] = nu_vals[i] + Delat_nu(Delta_t,nu_vals[i],0,r_vals[i],p_vals[i],L_vals[i],0,Delta_r_vals[i],u_vals[i],0)    
 
 
 # Plotting
@@ -160,7 +170,7 @@ plt.loglog(r_vals,rho_vals,label='Density')
 plt.loglog(r_vals,M_vals,label='Mass')
 plt.loglog(r_vals,p_vals,label='Pressure')
 plt.loglog(r_vals,nu_vals,label='1D Vel. Disp.')
-plt.loglog(r_vals[:N-1],np.abs(L_vals),label='Luminosity (abs val)')
+plt.loglog(r_vals,np.abs(L_vals),label='Luminosity (abs val)')
 plt.xlabel('r (kpc)')
 plt.legend()
 plt.show()
