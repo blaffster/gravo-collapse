@@ -85,13 +85,26 @@ def nu_deriv_RHS(N,nu,r,p,L,Delta_r,u):
 
 # Function to update mass
 #------------------------------------------------------------------------------
-def M_new(N,r,s,rho):
+#def M_new(N,r,s,rho):
+#    M = np.zeros(N)
+#    M[0] = (4*np.pi)/(3) * rho[0] * r[0]**3
+#    for i in range(1,N):
+#        M[i] = (4*np.pi)/(3)*rho[0]*s[1]**3 + (4*np.pi)/(3)*rho[i]*( r[i]**3 - s[i]**3 )
+#        for j in range(1,i):
+#                M[i]+= (4*np.pi)/(3) * rho[j] * ( s[j+1]**3 - s[j]**3 )
+#    return M
+
+
+def M_new(N,r,Delta_r,rho):
     M = np.zeros(N)
-    M[0] = (4*np.pi)/(3) * rho[0] * r[0]**3
+    M[0] = (3/4) * (4*np.pi)/(3) * rho[0] * Delta_r[0]**3
     for i in range(1,N):
-        M[i] = (4*np.pi)/(3)*rho[0]*s[1]**3 + (4*np.pi)/(3)*rho[i]*( r[i]**3 - s[i]**3 )
-        for j in range(1,i):
-                M[i]+= (4*np.pi)/(3) * rho[j] * ( s[j+1]**3 - s[j]**3 )
+        M[i] = (4*np.pi)/(3) * rho[0] * Delta_r[0]**3
+        for j in range(1,i+1):
+            if j==i:
+                M[i]+= (1/2) * (4*np.pi) * r[j]**2 * rho[j] * Delta_r[j]
+                break
+            M[i]+= (4*np.pi) * r[j]**2 * rho[j] * Delta_r[j]
     return M
 
 
@@ -159,7 +172,7 @@ sigma = sigma*sigma_convert # kpc^2/M_sun
 # Discretize halo and initialize quantities
 #------------------------------------------------------------------------------
 N = 100
-s = np.logspace(-5,2,N) * r_s
+s = np.logspace(-3,2,N) * r_s
 s = np.insert(s,0,0)
 r = []
 Delta_r = []
@@ -171,14 +184,59 @@ for i in range(N):
 rho = [rho_NFW (x,r_s,rho_s) for x in r]
 u = np.zeros(N)
 nu = [nu_NFW (x,r_s,rho_s) for x in r]
-#nu = np.ones(N) * np.mean(nu)
+M = M_new(N,r,Delta_r,rho)
+p = p_new(N,rho,nu)
 
-#M1 = [M_NFW(x,r_s,rho_s) for x in r]
-#M2 = M_new(N,r,s,rho)
-#plt.clf()
-#plt.loglog(r,M1)
-#plt.loglog(r,M2)
-#plt.show()
+
+def Force_Term_NFW (r,r_s,rho_s,G = 4.302e-06):
+    return - (G*M_NFW(r,r_s,rho_s))/(r**2)
+
+def Pressure_Term_NFW (r,r_s,rho_s,eps=1e-5):
+    return - (1/rho_NFW(r,r_s,rho_s)) * ( rho_NFW(r+eps,r_s,rho_s)*nu_NFW(r+eps,r_s,rho_s)**2 - rho_NFW(r-eps,r_s,rho_s)*nu_NFW(r-eps,r_s,rho_s)**2 )/(2*eps)
+
+def Force_Term_Discrete(N,M,r,G = 4.302e-06):
+    vals = np.zeros(N)
+    for i in range(N):
+        vals[i] = -(G*M[i])/r[i]**2
+    return vals
+
+def Pressure_Term_Discrete(N,Delta_r,rho,p,G = 4.302e-06):
+    vals = np.zeros(N)
+    for i in range(N):
+        if i!=N-1:
+            vals[i] = -(1/rho[i])*deriv(p[i],p[i+1],Delta_r[i])
+        else:
+            vals[i] = -(1/rho[i])*deriv(p[i-1],p[i],Delta_r[i-1])
+    return vals
+
+force_NFW = np.array([Force_Term_NFW (x,r_s,rho_s) for x in r])
+pressure_NFW = np.array([Pressure_Term_NFW (x,r_s,rho_s) for x in r])
+force_discrete = np.array(Force_Term_Discrete(N,M,r))
+pressure_discrete = np.array(Pressure_Term_Discrete(N,Delta_r,rho,p))
+plt.clf()
+
+#plt.title('Force vs. pressure term (from profile)')
+#plt.loglog(r,np.abs(force_NFW),'.',label='Force term (abs val)')
+#plt.loglog(r,pressure_NFW,'.',label='Pressure term')
+#plt.loglog(r,np.add(force_NFW,pressure_NFW),'.',label='Sum of terms')
+#print(force_NFW,'\n')
+#print(pressure_NFW)
+
+plt.title('Force vs. pressure term (discretized)')
+plt.loglog(r,np.abs(force_discrete),'.',label='Force term (abs val)')
+plt.loglog(r,pressure_discrete,'.',label='Pressure term')
+plt.loglog(r,np.abs(np.add(force_discrete,pressure_discrete)),'.',label='Sum of terms (abs val)')
+print(force_discrete,'\n')
+print(pressure_discrete)
+plt.legend()
+plt.show()
+
+
+
+
+
+
+
 
 
 # Time evolve quantities
@@ -196,8 +254,8 @@ nu = [nu_NFW (x,r_s,rho_s) for x in r]
 #plt.show()
 
 
-M = M_new(N,r,s,rho)
-p = p_new(N,rho,nu)
+#M = M_new(N,r,s,rho)
+#p = p_new(N,rho,nu)
 #L = L_new(N,r,nu,p,sigma,Delta_r)
 #drho_dt_RHS = rho_deriv_RHS(N,rho,u,Delta_r,r)
 #du_dt_RHS = u_deriv_RHS(N,u,Delta_r,M,r,rho,p)
@@ -205,10 +263,10 @@ p = p_new(N,rho,nu)
 #print(drho_dt_RHS,'\n')
 #print(du_dt_RHS,'\n')
 #print(dnu_dt_RHS,'\n')
-vals = np.zeros(N)
-for i in range(N):
-    if i!=N-1:
-        vals[i] = -u[i]*deriv(u[i],u[i+1],Delta_r[i]) - (G*M[i])/r[i]**2 - (1/rho[i])*deriv(p[i],p[i+1],Delta_r[i])
-    else:
-        vals[i] = -u[i]*deriv(u[i],0,Delta_r[i]) - (G*M[i])/r[i]**2 - (1/rho[i])*deriv(p[i],0,Delta_r[i])
-print(vals)
+#vals = np.zeros(N)
+#for i in range(N):
+#    if i!=N-1:
+#        vals[i] = -u[i]*deriv(u[i],u[i+1],Delta_r[i]) - (G*M[i])/r[i]**2 - (1/rho[i])*deriv(p[i],p[i+1],Delta_r[i])
+#    else:
+#        vals[i] = -u[i]*deriv(u[i],0,Delta_r[i]) - (G*M[i])/r[i]**2 - (1/rho[i])*deriv(p[i],0,Delta_r[i])
+#print(vals)
