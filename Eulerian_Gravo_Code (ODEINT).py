@@ -97,10 +97,10 @@ def nu_deriv_RHS(N,nu,r,p,L,Delta_r,u):
 
 def M_new(N,r,Delta_r,rho):
     M = np.zeros(N)
-    M[0] = (3/4) * (4*np.pi)/(3) * rho[0] * Delta_r[0]**3
-    for i in range(1,N):
-        M[i] = (4*np.pi)/(3) * rho[0] * Delta_r[0]**3
-        for j in range(1,i+1):
+#    M[0] = (3/4) * (4*np.pi)/(3) * rho[0] * Delta_r[0]**3
+    for i in range(0,N):
+#        M[i] = (4*np.pi)/(3) * rho[0] * Delta_r[0]**3
+        for j in range(0,i+1):
             if j==i:
                 M[i]+= (1/2) * (4*np.pi) * r[j]**2 * rho[j] * Delta_r[j]
             else:
@@ -171,14 +171,14 @@ sigma = sigma*sigma_convert # kpc^2/M_sun
 
 # Discretize halo and initialize quantities
 #------------------------------------------------------------------------------
-N = 200
-s = np.logspace(-4,2,N) * r_s
-s = np.insert(s,0,0)
+N = 100
+s = np.logspace(-4,2,N+1) * r_s
+#s = np.insert(s,0,0)
 r = []
 Delta_r = []
 for i in range(0,N):
-    r.append( np.sqrt((s[i+1]**2 + s[i]*s[i+1] + s[i]**2)/3) )
-#    r.append( np.sqrt(s[i] * s[i+1]) )
+#    r.append( np.sqrt((s[i+1]**2 + s[i]*s[i+1] + s[i]**2)/3) )
+    r.append( np.sqrt(s[i] * s[i+1]) )
 #    r.append( (s[i] + s[i+1])/2 )
     Delta_r.append(s[i+1] - s[i])
 
