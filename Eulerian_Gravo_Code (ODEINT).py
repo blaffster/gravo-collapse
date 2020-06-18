@@ -103,8 +103,8 @@ def M_new(N,r,Delta_r,rho):
         for j in range(1,i+1):
             if j==i:
                 M[i]+= (1/2) * (4*np.pi) * r[j]**2 * rho[j] * Delta_r[j]
-                break
-            M[i]+= (4*np.pi) * r[j]**2 * rho[j] * Delta_r[j]
+            else:
+                M[i]+= (4*np.pi) * r[j]**2 * rho[j] * Delta_r[j]
     return M
 
 
@@ -171,13 +171,15 @@ sigma = sigma*sigma_convert # kpc^2/M_sun
 
 # Discretize halo and initialize quantities
 #------------------------------------------------------------------------------
-N = 100
-s = np.logspace(-3,2,N) * r_s
+N = 200
+s = np.logspace(-4,2,N) * r_s
 s = np.insert(s,0,0)
 r = []
 Delta_r = []
-for i in range(N):
-    r.append( (s[i] + s[i+1])/2 )
+for i in range(0,N):
+    r.append( np.sqrt((s[i+1]**2 + s[i]*s[i+1] + s[i]**2)/3) )
+#    r.append( np.sqrt(s[i] * s[i+1]) )
+#    r.append( (s[i] + s[i+1])/2 )
     Delta_r.append(s[i+1] - s[i])
 
 
@@ -204,9 +206,9 @@ def Pressure_Term_Discrete(N,Delta_r,rho,p,G = 4.302e-06):
     vals = np.zeros(N)
     for i in range(N):
         if i!=N-1:
-            vals[i] = -(1/rho[i])*deriv(p[i],p[i+1],Delta_r[i])
+            vals[i] = -(p[i]/rho[i])*deriv(np.log(p[i]),np.log(p[i+1]),Delta_r[i])
         else:
-            vals[i] = -(1/rho[i])*deriv(p[i-1],p[i],Delta_r[i-1])
+            vals[i] = -(p[i]/rho[i])*deriv(np.log(p[i-1]),np.log(p[i]),Delta_r[i])
     return vals
 
 force_NFW = np.array([Force_Term_NFW (x,r_s,rho_s) for x in r])
@@ -215,19 +217,15 @@ force_discrete = np.array(Force_Term_Discrete(N,M,r))
 pressure_discrete = np.array(Pressure_Term_Discrete(N,Delta_r,rho,p))
 plt.clf()
 
-#plt.title('Force vs. pressure term (from profile)')
-#plt.loglog(r,np.abs(force_NFW),'.',label='Force term (abs val)')
-#plt.loglog(r,pressure_NFW,'.',label='Pressure term')
-#plt.loglog(r,np.add(force_NFW,pressure_NFW),'.',label='Sum of terms')
-#print(force_NFW,'\n')
-#print(pressure_NFW)
+plt.loglog(r,np.abs(force_NFW),label='Force term profile (abs val)')
+plt.loglog(r,pressure_NFW,label='Pressure term profile')
+#plt.loglog(r,np.add(force_NFW,pressure_NFW),label='Sum of terms profile')
+plt.loglog(r,np.abs(force_discrete),'.',label='Force term discretized (abs val)')
+plt.loglog(r,pressure_discrete,'.',label='Pressure discretized term')
+#plt.loglog(r,np.abs(np.add(force_discrete,pressure_discrete)),'.',label='Sum of terms discretized (abs val)')
 
-plt.title('Force vs. pressure term (discretized)')
-plt.loglog(r,np.abs(force_discrete),'.',label='Force term (abs val)')
-plt.loglog(r,pressure_discrete,'.',label='Pressure term')
-plt.loglog(r,np.abs(np.add(force_discrete,pressure_discrete)),'.',label='Sum of terms (abs val)')
-print(force_discrete,'\n')
-print(pressure_discrete)
+plt.title('Force vs. pressure term (from profile and discretized)')
+plt.xlabel('r (kpc)')
 plt.legend()
 plt.show()
 
