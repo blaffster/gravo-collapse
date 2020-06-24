@@ -28,6 +28,19 @@ def M_NFW(r,r_s,rho_s):
         return 4*np.pi*rho_s*r_s**3*((1/2)*X_s**2 - (2/3)*X_s**3 + (3/4)*X_s**4 - (4/5)*X_s**5)
 
 
+# Function to get initial discretized rho values
+#------------------------------------------------------------------------------
+def get_rho_int(N,s,r_s,rho_s):
+    M = np.zeros(N)
+    V = np.zeros(N)
+    rho = np.zeros(N)
+    for i in range (N):
+        M[i] = M_NFW(s[i+1],r_s,rho_s) - M_NFW(s[i],r_s,rho_s)
+        V[i] = (4/3) * np.pi * (s[i+1]**3 - s[i]**3)
+        rho[i] = M[i]/V[i]
+    return rho
+
+
 # Function to get integrand for pressure integral
 #------------------------------------------------------------------------------  
 def nu_integrand(r,r_s,rho_s,G = 4.302e-06):
@@ -36,9 +49,24 @@ def nu_integrand(r,r_s,rho_s,G = 4.302e-06):
 
 # Function to get P_NFW
 #------------------------------------------------------------------------------
-def nu_NFW(r,r_s,rho_s):
+def nu_NFW(r,rho,r_s,rho_s):
     integral = quad(nu_integrand, r, math.inf, args=(r_s,rho_s))[0]
-    return np.sqrt( (1/rho_NFW (r,r_s,rho_s)) * integral )
+    return np.sqrt( (1/rho) * integral )
+
+
+# Function to get initial discretized nu values
+#------------------------------------------------------------------------------
+def get_nu_init(N,s,rho,r_s,rho_s):
+    nu = np.zeros(N)
+    for i in range(N):
+        num = 50
+        samples = np.linspace(s[i],s[i+1],num)
+        SUM = 0
+        for j in range(num):
+            SUM += nu_NFW(samples[j],rho[i],r_s,rho_s)
+        nu[i] = SUM/num
+    return nu
+    
 
 
 # Function to calculate finite differences
@@ -85,23 +113,18 @@ def nu_deriv_RHS(N,nu,r,p,L,Delta_r,u):
 
 # Function to update mass
 #------------------------------------------------------------------------------
-#def M_new(N,r,s,rho):
-#    M = np.zeros(N)
-#    M[0] = (4*np.pi)/(3) * rho[0] * r[0]**3
-#    for i in range(1,N):
-#        M[i] = (4*np.pi)/(3)*rho[0]*s[1]**3 + (4*np.pi)/(3)*rho[i]*( r[i]**3 - s[i]**3 )
-#        for j in range(1,i):
-#                M[i]+= (4*np.pi)/(3) * rho[j] * ( s[j+1]**3 - s[j]**3 )
-#    return M
-
-
 def M_new(N,r,Delta_r,rho):
     M = np.zeros(N)
 #    M[0] = (3/4) * (4*np.pi)/(3) * rho[0] * Delta_r[0]**3
     for i in range(0,N):
 #        M[i] = (4*np.pi)/(3) * rho[0] * Delta_r[0]**3
         for j in range(0,i+1):
-            if j==i:
+            if j==0 and i==0:
+                M[i]+= (1/3) * (4*np.pi)/3 * rho[j] * Delta_r[j]**3
+#                M[i]+= (3/4) * (4*np.pi)/3 * rho[j] * Delta_r[j]**3
+            elif j==0:
+                M[i]+= (4*np.pi)/3 * rho[j] * Delta_r[j]**3
+            elif j==i:
                 M[i]+= (1/2) * (4*np.pi) * r[j]**2 * rho[j] * Delta_r[j]
             else:
                 M[i]+= (4*np.pi) * r[j]**2 * rho[j] * Delta_r[j]
@@ -172,29 +195,30 @@ sigma = sigma*sigma_convert # kpc^2/M_sun
 # Discretize halo and initialize quantities
 #------------------------------------------------------------------------------
 N = 100
-s = np.logspace(-4,2,N+1) * r_s
-#s = np.insert(s,0,0)
+s = np.logspace(-4,2,N) * r_s
+s = np.insert(s,0,1e-8*r_s)
 r = []
 Delta_r = []
 for i in range(0,N):
-#    r.append( np.sqrt((s[i+1]**2 + s[i]*s[i+1] + s[i]**2)/3) )
-    r.append( np.sqrt(s[i] * s[i+1]) )
+    r.append( np.sqrt((s[i+1]**2 + s[i]*s[i+1] + s[i]**2)/3) )
+#    r.append( np.sqrt(s[i] * s[i+1]) )
 #    r.append( (s[i] + s[i+1])/2 )
     Delta_r.append(s[i+1] - s[i])
 
 
-rho = [rho_NFW (x,r_s,rho_s) for x in r]
+rho = get_rho_int(N,s,r_s,rho_s)
 u = np.zeros(N)
-nu = [nu_NFW (x,r_s,rho_s) for x in r]
+#nu = [nu_NFW (x,r_s,rho_s) for x in r]
+nu = get_nu_init(N,s,rho,r_s,rho_s)
 M = M_new(N,r,Delta_r,rho)
 p = p_new(N,rho,nu)
 
 
 def Force_Term_NFW (r,r_s,rho_s,G = 4.302e-06):
-    return - (G*M_NFW(r,r_s,rho_s))/(r**2)
+    return -(G*M_NFW(r,r_s,rho_s))/(r**2)
 
-def Pressure_Term_NFW (r,r_s,rho_s,eps=1e-5):
-    return - (1/rho_NFW(r,r_s,rho_s)) * ( rho_NFW(r+eps,r_s,rho_s)*nu_NFW(r+eps,r_s,rho_s)**2 - rho_NFW(r-eps,r_s,rho_s)*nu_NFW(r-eps,r_s,rho_s)**2 )/(2*eps)
+def Pressure_Term_NFW (r,r_s,rho_s,eps=1e-10):
+    return -(1/rho_NFW(r,r_s,rho_s)) * (rho_NFW(r+eps,r_s,rho_s)*nu_NFW(r+eps,rho_NFW(r+eps,r_s,rho_s),r_s,rho_s)**2 - rho_NFW(r-eps,r_s,rho_s)*nu_NFW(r-eps,rho_NFW(r-eps,r_s,rho_s),r_s,rho_s)**2)/(2*eps)
 
 def Force_Term_Discrete(N,M,r,G = 4.302e-06):
     vals = np.zeros(N)
@@ -205,6 +229,11 @@ def Force_Term_Discrete(N,M,r,G = 4.302e-06):
 def Pressure_Term_Discrete(N,Delta_r,rho,p,G = 4.302e-06):
     vals = np.zeros(N)
     for i in range(N):
+        if i==0:
+            print(np.log(p[i]))
+            print(np.log(p[i+1]))
+            print(Delta_r[i])
+            print(deriv(np.log(p[i]),np.log(p[i+1]),Delta_r[i]))
         if i!=N-1:
             vals[i] = -(p[i]/rho[i])*deriv(np.log(p[i]),np.log(p[i+1]),Delta_r[i])
         else:
@@ -217,11 +246,11 @@ force_discrete = np.array(Force_Term_Discrete(N,M,r))
 pressure_discrete = np.array(Pressure_Term_Discrete(N,Delta_r,rho,p))
 plt.clf()
 
-plt.loglog(r,np.abs(force_NFW),label='Force term profile (abs val)')
 plt.loglog(r,pressure_NFW,label='Pressure term profile')
+plt.loglog(r,np.abs(force_NFW),label='Force term profile (abs val)')
 #plt.loglog(r,np.add(force_NFW,pressure_NFW),label='Sum of terms profile')
-plt.loglog(r,np.abs(force_discrete),'.',label='Force term discretized (abs val)')
 plt.loglog(r,pressure_discrete,'.',label='Pressure discretized term')
+plt.loglog(r,np.abs(force_discrete),'.',label='Force term discretized (abs val)')
 #plt.loglog(r,np.abs(np.add(force_discrete,pressure_discrete)),'.',label='Sum of terms discretized (abs val)')
 
 plt.title('Force vs. pressure term (from profile and discretized)')
