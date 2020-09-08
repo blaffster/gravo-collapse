@@ -55,9 +55,9 @@ def W3_integrand(rp,r,h):
 
 plt.clf()
 epsilon = 1e-12
-truncate_factor = 5
+truncate_factor = 7
 h = 1
-r = (5/4) * h
+r = (7/2) * h
 X = h-r
 Y = 2*h-r
 
@@ -96,7 +96,7 @@ elif Y <= 0:
     rp3 = np.linspace(epsilon,truncate_factor*h,500)
     W3 = [W3_integrand(x,r,h) for x in rp3]
     plt.plot(rp3,W3,label='W3')
-    integral_3 = quad(W3_integrand, epsilon, factor*h, args=(r,h))[0]
+    integral_3 = quad(W3_integrand, epsilon, truncate_factor*h, args=(r,h))[0]
     integral_tot = integral_3
     print(integral_tot)
     
