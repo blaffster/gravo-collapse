@@ -63,7 +63,6 @@ def W_3S1(rp,r,h):
     σ_prime = rp/h
     X = σ_prime + σ
     Y = abs(σ_prime - σ)
-#    print('X=',X,'Y=',Y)
     prefactor = 1/(h*rp*r)
     
     if 2 < X:
@@ -196,22 +195,20 @@ def r_func(r,M,r_s,rho_s):
 def rho_i(r,h,m,N):
     rho = np.zeros(N)
     for i in range(0,N):
-        rho[i] = m * W_3S1(r[i],r[i],h[i])
-        for j in range(i+1,N):
+        for j in range(0,N):
             rho_ij = m * W_3S1(r[j],r[i],h[i])
             rho[i] += rho_ij
-            rho[j] += rho_ij
     return rho
 
 
 # Function used to determine dvdt
 #------------------------------------------------------------------------------
-def dvdt(m,P,rho,r,G=4.302e-6):
+def dvdt(m,P,rho,r,h,G=4.302e-6):
     RHS = np.zeros(N)
     for i in range(0,N):
         for j in range(0,N):
             if j != i:
-                term1 = -m * ( (P[i]/rho[i]**2) + (P[j]/rho[j]**2) ) * dWdr(r[j],r[i],h)
+                term1 = -m * ( (P[i]/rho[i]**2) + (P[j]/rho[j]**2) ) * dWdr(r[j],r[i],h[i])
                 if r[i] > r[j]:
                     term2 = -G * (m/r[j]**2)
                 else:
@@ -259,42 +256,8 @@ def M_integrand(rp,r,h):
     elif X <= 1:
         return prefactor * ( C(X) - C(Y) ) * rp**2
 
-#def M_integrand_1(rp,r,h):
-#    σ = r/h
-#    σ_prime = rp/h
-#    X = σ_prime + σ
-#    Y = abs(σ_prime - σ)
-#    prefactor = 1/(h*rp*r)
-#    return prefactor * ( C(X) - C(Y) ) * rp**2
-#
-#def M_integrand_2(rp,r,h):
-#    σ = r/h
-#    σ_prime = rp/h
-#    X = σ_prime + σ
-#    Y = abs(σ_prime - σ)
-#    prefactor = 1/(h*rp*r)
-#    if 0 <= Y < 1:
-#        return prefactor * ( (-1/10) + D(X) - C(Y) ) * rp**2
-#    elif 1 <= Y < 2:
-#        return prefactor * ( D(X) - D(Y) ) * rp**2
-#    else:
-#        return 0
-#
-#def M_integrand_3(rp,r,h):
-#    σ = r/h
-#    σ_prime = rp/h
-#    Y = abs(σ_prime - σ)
-#    prefactor = 1/(h*rp*r)
-#    if 0 <= Y < 1:
-#        return prefactor * ( (7/10) - C(Y) ) * rp**2
-#    elif 1 <= Y < 2:
-#        return prefactor * ( (8/10) - D(Y) ) * rp**2
-#    else:
-#        return 0
 
-
-
-# Initialize quantities
+# Initialize constants
 #------------------------------------------------------------------------------
 rho_s = 0.019 * (1000/1)**3 # M_sun/kpc^3, Nishikawa pg.9
 r_s = 2.59 # kpc, Nishikawa pg.9
@@ -303,101 +266,84 @@ mpc_to_kpc = 1/1000
 H_0 = 70 * mpc_to_kpc
 p_crit = 3 * (H_0)**2 * (8*np.pi*G)**(-1)
 
+
+# Find virial radius/concentration parameter
+#------------------------------------------------------------------------------
 c = fsolve(c_func, 1, args=(rho_s,p_crit))[0]
 R_vir = c*r_s
-print(R_vir)
 
+
+# Set number of particles/particle mass
+#------------------------------------------------------------------------------
 M_vir = M_NFW(R_vir,r_s,rho_s)
-N = 1
-m = M_vir/N
+N = 300
+m = 1/(4*pi) * (M_vir/N)
+
+
+# Sample initial density distribution, initialize r_i/v_i/P_i
+#------------------------------------------------------------------------------
 M_samples = np.zeros(N)
 np.random.seed(0)
 for i in range(0,N):
     M_samples[i] = np.random.uniform()*M_vir
 M_samples = np.sort(M_samples)
-
 r = np.zeros(N)
 v = np.zeros(N)
 P = np.zeros(N)
 for i in range(0,N):
     r[i] = fsolve(r_func, 1, args=(M_samples[i],r_s,rho_s))[0]
     P[i] = P_NFW(r[i],r_s,rho_s)
-print(r)
 
-h = 2.558757069044308
-epsilon = 1e-12
-n = 100
-#M1 = np.zeros(n)
-M = np.zeros(n)
-r_samp = np.linspace(r[0],10*R_vir,n)
-for i in range(n):
-    x = h - r_samp[i]
-    y = 2*h - r_samp[i]
-    for j in range(N):
-#        if x > 0  and x < r_samp[i] and y < r_samp[i]:
-#            integral_1 = quad(M_integrand_1, epsilon, x, args=(r_samp[i],h))[0]
-#            integral_2 = quad(M_integrand_2, x+epsilon, y, args=(r_samp[i],h))[0]
-#            integral_3 = quad(M_integrand_3, y+epsilon, r_samp[i], args=(r_samp[i],h))[0]
-#            integral_tot = integral_1 + integral_2 + integral_3
-#        elif x > 0  and x < r_samp[i] and y > r_samp[i]:
-#            integral_1 = quad(M_integrand_1, epsilon, x, args=(r_samp[i],h))[0]
-#            integral_2 = quad(M_integrand_2, x+epsilon, r_samp[i], args=(r_samp[i],h))[0]
-#            integral_tot = integral_1 + integral_2
-#        elif x > 0  and x > r_samp[i]:
-#            integral_1 = quad(M_integrand_1, epsilon, r_samp[i], args=(r_samp[i],h))[0]
-#            integral_tot = integral_1
-#        elif x < 0 and y > 0 and y < r_samp[i]:
-#            integral_2 = quad(M_integrand_2, epsilon, y, args=(r_samp[i],h))[0]
-#            integral_3 = quad(M_integrand_3, y+epsilon, r_samp[i], args=(r_samp[i],h))[0]
-#            integral_tot = integral_2 + integral_3
-#        elif x < 0 and y > 0 and y > r_samp[i]:
-#            integral_2 = quad(M_integrand_2, epsilon, r_samp[i], args=(r_samp[i],h))[0]
-#            integral_tot = integral_2
-#        elif x < 0 and y < 0:
-#            integral_3 = quad(M_integrand_3, epsilon, r_samp[i], args=(r_samp[i],h))[0]
-#            integral_tot = integral_3
-#        else:
-#            print(x,y)
-#        M1[i] += 4*pi*integral_tot
-        M[i] += 4*pi*m*quad(M_integrand, 0, r_samp[i], args=(r_samp[i],h))[0]
-        
-plt.clf()
-plt.plot(r_samp,[M_NFW(x,r_s,rho_s) for x in r_samp])
-#plt.plot(r_samp,[M_NFW(x,r_s,rho_s)*(N/M_vir) for x in r_samp])
-#plt.plot(r_samp,M1,'.')
-plt.plot(r_samp,M,'.')
-#plt.axvline(R_vir,color='grey',linestyle='--')
-#plt.axhline(N,color='grey',linestyle='--')
-plt.show()
-        
+# Initialize smoothing lengths h_i
+#------------------------------------------------------------------------------
+eta = 1.5
+h = np.zeros(N)
+for i in range(N):
+    h[i] = eta * (m/rho_NFW(r[i],r_s,rho_s))**(1/3)
     
+    
+# Calculate/plot SPH mass profile, compare it to NFW
+#------------------------------------------------------------------------------
+#n = 75
+#r_samp = np.linspace(r[0],r[-1],n)
+#M = np.zeros(n)
+#for i in range(n):
+#    for j in range(N):
+#        M[i] += 4*pi*m*quad(M_integrand, 0, r_samp[i], args=(r[j],h[j]))[0]
 #plt.clf()
-#particle_distances = []
-#for i in range(0,N):
-#    for j in range(i+1,N):
-#        particle_distances.append(np.abs(r[j]-r[i]))
-#avg_dist = sum(particle_distances)/len(particle_distances)
-#fraction = 0.2
-#sl = fraction * avg_dist
-#h = np.ones(N) * sl
-#rho = rho_i(r,h,m,N)
-#plt.loglog(r,rho,'.',label='SPH, h='+str(round(sl,2)))
-#
-#h = np.zeros(N)
-#eta = 1
-#while eta<10:
-#    for i in range(0,N):
-#        h[i] = eta * (m/rho_NFW(r[i],r_s,rho_s))**(1/3)
-#    rho = rho_i(r,h,m,N)
-#    plt.loglog(r,rho,'.',label='SPH, η='+str(eta))
-#    eta += 2
-#
-#plt.loglog(r,[rho_NFW(x,r_s,rho_s) for x in r],'k-',label='NFW')
-#plt.xlabel('r')
-#plt.ylabel('ρ(r)')
+#plt.plot(r_samp,[M_NFW(x,r_s,rho_s) for x in r_samp],label='NFW')
+#plt.plot(r_samp,M,'.',label='SPH')s
+#plt.title('Mass profiles NFW vs. SPH (N = 5000, n = 75, η = 1.5)')
+#plt.xlabel('r (kpc)')
+#plt.ylabel('M (M_sun)')
 #plt.legend()
 #plt.show()
 
-#e = np.zeros(N)
-#for i in range(0,N):
-#    e[i] = (3/2)*(P[i]/rho[i])
+
+# Calculate/plot SPH density profile, compare it to NFW, initialize u/a
+#------------------------------------------------------------------------------
+rho = rho_i(r,h,m,N)
+u = (3/2)*(P/rho)
+a = dvdt(m,P,rho,r,h)
+#plt.clf()
+#plt.loglog(r,[rho_NFW(x,r_s,rho_s) for x in r],label='NFW')
+#plt.loglog(r,rho,'.',label='SPH')
+#plt.xlabel('r  [kpc]')
+#plt.ylabel('ρ(r)  [M_sun/kpc^3]')
+#plt.title('Density profiles NFW vs. SPH (N = 5000, η = 1.5)')
+#plt.legend()
+#plt.show()
+
+
+# Begin time-evolution
+#------------------------------------------------------------------------------
+steps = 10
+r_new = np.zeros(N)
+v_new = np.zeros(N)
+#r_matrix = np.zeros((steps,N))
+#v_matrix = np.zeros((steps,N))
+for i in range(N):
+    r_new [i] = r[i] + dt*( v[i] + (dt/2)*a[i] )
+    v_new [i] = v[i] + (dt/2)*(a[i]+a[i+1])
+
+
