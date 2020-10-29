@@ -5,6 +5,8 @@ Created on Mon Aug 24 09:54:14 2020
 @author: nebue
 """
 
+#import pandas as pd
+#y = pd.read_csv('neighbors.csv')
 import numpy as np
 import math
 from scipy.integrate import quad
@@ -262,11 +264,19 @@ def r_func(r,M,r_s,rho_s):
 
 # Function used to determine rho_i
 #------------------------------------------------------------------------------
-def get_rho(N,i,r,h,m):
-    rho = 0
-    for j in range(0,N):
-        rho += m * W_3S1(r[j],r[i],h[i])
-    return rho
+def get_rho(N,i,j,r,h,m):
+    rho_ij = 0
+    index = np.where(abs(r[i]-r[i,j]) <= h)[0]
+    for k in index:
+        rho_ij += m * W_3S1(r[i,k],r[i,j],h)
+    return rho_ij
+
+
+#def get_rho(N,i,r,h,m):
+#    rho = 0
+#    for j in range(0,N):
+#        rho += m * W_3S1(r[j],r[i],h[i])
+#    return rho
 
 
 # Function used to determine dvdt
@@ -277,11 +287,33 @@ def dvdt(N,i,m,P,rho,r,h,G=4.302e-6):
         if j != i:
             term1 = -m * ( (P[i]/rho[i]**2) + (P[j]/rho[j]**2) ) * dWdr(r[j],r[i],h[i])
             if r[i] > r[j]:
-                term2 = -G * (m/r[j]**2)
+                term2 = -G * (m/r[i]**2)
             else:
                 term2 = 0
             RHS += term1 + term2
     return RHS
+
+
+#def force_term(N,i,m,r,G=4.302e-6):
+#    RHS = 0
+#    for j in range(0,N):
+#        if j != i:
+#            if r[i] > r[j]:
+#                term2 = -G * (m/r[j]**2)
+#            else:
+#                term2 = 0
+#            RHS += term2
+#    return RHS
+#
+#
+#def pressure_term(N,i,m,P,rho,r,h,G=4.302e-6):
+#    RHS = 0
+#    for j in range(0,N):
+#        if j != i:
+#            term1 = -m * ( (P[i]/rho[i]**2) + (P[j]/rho[j]**2) ) * dWdr(r[j],r[i],h[i])
+#            RHS += term1
+#    return RHS
+    
 
 
 # Function used to determine dudt
@@ -292,35 +324,6 @@ def dedt(N,i,m,P,rho,v,h,r):
         if j != i:
             RHS += m * (P[i]/rho[i]**2) * ( v[j]*dWdrp(r[j],r[i],h[i]) + v[i]*dWdr(r[j],r[i],h[i]) )
     return RHS
-
-
-# Integrand for mass integral
-#------------------------------------------------------------------------------
-#def M_integrand(rp,r,h):
-#    σ = r/h
-#    σ_prime = rp/h
-#    X = σ_prime + σ
-#    Y = abs(σ_prime - σ)
-#    prefactor = 1/(h*rp*r)
-#    
-#    if 2 < X:
-#        if 0 <= Y < 1:
-#            return prefactor * ( (7/10) - C(Y) ) * rp**2
-#        elif 1 <= Y < 2:
-#            return prefactor * ( (8/10) - D(Y) ) * rp**2
-#        else:
-#            return 0
-#        
-#    elif 1 < X <= 2:
-#        if 0 <= Y < 1:
-#            return prefactor * ( (-1/10) + D(X) - C(Y) ) * rp**2
-#        elif 1 <= Y < 2:
-#            return prefactor * ( D(X) - D(Y) ) * rp**2
-#        else:
-#            return 0
-#        
-#    elif X <= 1:
-#        return prefactor * ( C(X) - C(Y) ) * rp**2
 
 
 # Initialize constants
@@ -342,18 +345,19 @@ R_vir = c*r_s
 # Set number of particles/particle mass
 #------------------------------------------------------------------------------
 M_vir = M_NFW(R_vir,r_s,rho_s)
-N = 500
+N = 5000
 m = 1/(4*pi) * (M_vir/N)
 
 
 # Sample initial density distribution, initialize r_i/v_i/P_i
 #------------------------------------------------------------------------------
-M_samples = np.zeros(N)
-np.random.seed(0)
-for i in range(0,N):
-    M_samples[i] = np.random.uniform()*M_vir
-M_samples = np.sort(M_samples)
-steps = 20
+#M_samples = np.zeros(N)
+#np.random.seed(2)
+#for i in range(0,N):
+#    M_samples[i] = np.random.uniform()*M_vir
+#M_samples = np.sort(M_samples)
+M_samples = np.linspace(M_vir/N,M_vir,N)
+steps = 15
 r = np.zeros((steps+1,N))
 v = np.zeros((steps+1,N))
 P = np.zeros((steps+1,N))
@@ -361,84 +365,113 @@ for j in range(0,N):
     r[0,j] = fsolve(r_func, 1, args=(M_samples[j],r_s,rho_s))[0]
     P[0,j] = P_NFW(r[0,j],r_s,rho_s)
 
+
 # Initialize smoothing lengths h_i
 #------------------------------------------------------------------------------
-eta = 1.5
+eta_new = 0.7
+#eta = 1.5
 h = np.zeros((steps+1,N))
 for j in range(N):
-    h[0,j] = eta * (m/rho_NFW(r[0,j],r_s,rho_s))**(1/3)
-    
-    
-# Calculate/plot SPH mass profile, compare it to NFW
-#------------------------------------------------------------------------------
-#n = 75
-#r_samp = np.linspace(r[0],r[-1],n)
-#M = np.zeros(n)
-#for i in range(n):
-#    for j in range(N):
-#        M[i] += 4*pi*m*quad(M_integrand, 0, r_samp[i], args=(r[j],h[j]))[0]
-#plt.clf()
-#plt.plot(r_samp,[M_NFW(x,r_s,rho_s) for x in r_samp],label='NFW')
-#plt.plot(r_samp,M,'.',label='SPH')s
-#plt.title('Mass profiles NFW vs. SPH (N = 5000, n = 75, η = 1.5)')
-#plt.xlabel('r (kpc)')
-#plt.ylabel('M (M_sun)')
-#plt.legend()
-#plt.show()
+    h[0,j] = eta_new * (m)/(r[0,j]**2 * rho_NFW(r[0,j],r_s,rho_s))
+#    h[0,j] = eta * (m/rho_NFW(r[0,j],r_s,rho_s))**(1/3)
 
 
 # Calculate/plot SPH density profile, compare it to NFW, initialize u
 #------------------------------------------------------------------------------
 rho = np.zeros((steps+1,N))
-for j in range(0,N):
-    rho[0,j] = get_rho(N,j,r[0],h[0],m)
+neighbors = np.zeros(N)
+for i in range (0,N):
+    index = np.where(abs(r[0]-r[0,i]) <= h[0,i])[0]
+    neighbors[i] = len(index)
+    for j in index:
+        rho[0,i] += m * W_3S1(r[0,j],r[0,i],h[0,i])
+np.savetxt('neighbors.csv', neighbors, delimiter=',')
+    
+#rho = np.zeros((steps+1,N))
+#for j in range(0,N):
+#    rho[0,j] = get_rho(N,j,r[0],h[0],m)
 e = np.zeros((steps+1,N))
 e[0] = (3/2)*(P[0]/rho[0])
+
 #plt.clf()
-#plt.loglog(r,[rho_NFW(x,r_s,rho_s) for x in r],label='NFW')
-#plt.loglog(r,rho,'.',label='SPH')
+#plt.loglog(r[0],rho[0],'.',label='SPH (η='+str(eta_new)+')')
+#plt.loglog(r[0],[rho_NFW(x,r_s,rho_s) for x in r[0]],label='NFW')
+#plt.plot(r[0],neighbors,'.',label='# of neighbors')
+#plt.title('N='+str(N))
+#plt.title('NFW vs. SPH Initial Density Profile (N='+str(N)+')')
 #plt.xlabel('r  [kpc]')
 #plt.ylabel('ρ(r)  [M_sun/kpc^3]')
-#plt.title('Density profiles NFW vs. SPH (N = 5000, η = 1.5)')
 #plt.legend()
 #plt.show()
 
 
 # Begin time-evolution
 #------------------------------------------------------------------------------
-#f_F = (0.25+0.5)/2
-#dt_F = np.zeros(N)
 dt = 0.001
 t_elapsed = 0
 print('t_elapsed =',t_elapsed,'  r_0 =', r[0,0],'  rho_0 =',rho[0,0])
-for i in range (1,steps+1):
-#    for j in range(0,N):
-#        a_abs = np.abs ( dvdt(N,j,m,P[i-1],rho[i-1],r[i-1],h[i-1]) )
-#        dt_F[j] = f_F*np.sqrt(h[i-1,j]/a_abs)
-#    dt = min(dt_F)
-#    print(dt)
+#forces = np.zeros(steps+1)
+#pressures = np.zeros(steps+1)
+#energy = np.zeros(steps+1)
+#forces[0] = force_term(N,0,m,r[0])
+#pressures[0] = pressure_term(N,0,m,P[0],rho[0],r[0],h[0])
+#energy[0] = dedt(N,0,m,P[0],rho[0],v[0],h[0],r[0])
+for i in range (0,steps):
     for j in range(0,N):
-        # Update r, v, and u
-        v[i,j] = v[i-1,j] + dt*dvdt(N,j,m,P[i-1],rho[i-1],r[i-1],h[i-1])
-        r[i,j] = r[i-1,j] + dt*v[i-1,j]
-        e[i,j] = e[i-1,j] + dt*dedt(N,j,m,P[i-1],rho[i-1],v[i-1],h[i-1],r[i-1])
-#        print(r[i,j])
+#         Update r, v, and u
+        v[i+1,j] = v[i,j] + dvdt(N,j,m,P[i],rho[i],r[i],h[i])*dt
+        r[i+1,j] = r[i,j] + v[i,j]*dt
+        e[i+1,j] = e[i,j] + dedt(N,j,m,P[i],rho[i],v[i],h[i],r[i])*dt
+        print(r[i,j])
     for j in range(0,N):
-        # Update rho, P, and h
-        rho[i,j] = get_rho(N,j,r[i],h[i-1],m)
-        P[i,j] = (2/3) * rho[i,j] * e[i,j]
-        h[i,j] = eta * (m/rho[i,j])**(1/3)
+#         Update rho, P, and h
+        rho[i+1,j] = get_rho(N,i,j,r[i+1],h[i,j],m)
+        P[i+1,j] = (2/3) * rho[i+1,j] * e[i+1,j]
+        h[i+1,j] = eta_new * (m/rho[i+1,j])**(1/3)
+        h[i+1,j] = eta_new * (m)/(r[i+1,j]**2 * rho[i+1,j])
+#    forces[i+1] = force_term(N,0,m,r[i+1])
+#    pressures[i+1] = pressure_term(N,0,m,P[i+1],rho[i+1],r[i+1],h[i+1])
+#    energy[i+1] = dedt(N,0,m,P[i+1],rho[i+1],v[i+1],h[i+1],r[i+1])
     t_elapsed += dt
-    print('t_elapsed =',t_elapsed,'  r_0 =', r[i,0],'  rho_0 =',rho[i,0])
-print(min(r[-1]))
+    print('t_elapsed =',t_elapsed,'  r_0 =', r[i+1,0],'  rho_0 =',rho[i+1,0])
 
-plt.clf()
-plt.title('SPH Density Profile Evolution (N=1000,steps=15,dt=0.001)')
-plt.xlabel('r  [kpc]')
-plt.ylabel('ρ(r)  [M_sun/kpc^3]')
-r_vals = np.linspace(min(r[-1]),max(r[-1]),1000)
-plt.loglog(r_vals,[rho_NFW(x,r_s,rho_s) for x in r_vals],label='NFW')
-plt.loglog(r[0],rho[0],linestyle='--', marker='o',markersize=3,label='Initial SPH')
-plt.loglog(r[-1],rho[-1],linestyle='--', marker='o',markersize=3,label='Final SPH')
-plt.legend()
-plt.show()
+
+#np.savetxt('v.csv', v, delimiter=',')
+#np.savetxt('r.csv', r, delimiter=',') 
+#np.savetxt('e.csv', e, delimiter=',') 
+#np.savetxt('rho.csv', rho, delimiter=',') 
+#np.savetxt('P.csv', P, delimiter=',') 
+#np.savetxt('h.csv', h, delimiter=',') 
+
+
+#plt.clf()
+#plt.ylabel('r [kpc]')
+#plt.xlabel('time step')
+#plt.title('Positions of 10 innermost particle-shells vs. time')
+#
+#for j in range(10):
+#    plt.plot(r[0:steps,j],linestyle='--', marker='o',markersize=3,label='Particle '+str(j))
+#    
+#plt.legend(loc='upper right', bbox_to_anchor=(1.1, 1))
+#plt.show()
+
+#plt.title('SPH Density Profile Evolution (N=1000,steps=15,dt=0.001)')
+#plt.xlabel('r  [kpc]')
+#plt.ylabel('ρ(r)  [M_sun/kpc^3]')
+#r_vals = np.linspace(min(r[-1]),max(r[-1]),1000)
+#plt.loglog(r_vals,[rho_NFW(x,r_s,rho_s) for x in r_vals],label='NFW')
+#plt.loglog(r[0],rho[0],linestyle='--', marker='o',markersize=3,label='Initial SPH')
+#plt.loglog(r[-1],rho[-1],linestyle='--', marker='o',markersize=3,label='Final SPH')
+
+#plt.plot(r[:,0],linestyle='--', marker='o',markersize=3)
+#plt.title('Position of innermost particle-shell vs. time')
+#plt.ylabel('r [kpc]')
+#plt.plot(forces,linestyle='--', marker='o',markersize=3,label='Force')
+#plt.plot(pressures,linestyle='--', marker='o',markersize=3,label='Pressure')
+#plt.plot(energy,linestyle='--', marker='o',markersize=3,label='Energy term')
+#plt.title('Force/pressure term for innermost particle-shell vs. time')
+#plt.xlabel('time step')
+#plt.ylabel('force/pressure term')
+
+#plt.legend()
+#plt.show()
