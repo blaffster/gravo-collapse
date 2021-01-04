@@ -267,45 +267,33 @@ def r_func(r,M,r_s,rho_s):
 def get_rho(N,i,index,r,h,m):
     rho_ij = 0
     for j in index:
-        rho_ij += m * W_3S1(r[j],r[i],h)
+        rho_ij += (m * (4*pi)**(-1)) * W_3S1(r[j],r[i],(h[i]+h[j])/2)
     return rho_ij
 
 
 # Function used to determine dvdt
 #------------------------------------------------------------------------------
-def dvdt(step,N,i,index,m,P,rho,r,h,G=4.302e-6):
+def dvdt(N,i,index,m,P,rho,r,h,G=4.302e-6):
     RHS = 0
     force = 0
     pressure = 0
     for j in index:
         if j != i:
-            term1 = -m * ( (P[i]/rho[i]**2) + (P[j]/rho[j]**2) ) * dWdr(r[j],r[i],h)
-#            if step == 25 and i == 133:
-            if step == 24 and i == 214:
-                print('i=',i,'j=',j,'r_i=',r[i],'r_j=',r[j],'r_ij=',np.abs(r[i]-r[j]),'2*h_i=',2*h,'P=',term1)
+            term1 = rho[i] * (-m * (4*pi)**(-1)) * ( (P[i]/rho[i]**2) + (P[j]/rho[j]**2) ) * dWdr(r[j],r[i],h[i])
+#            term1 = rho[i] * (-m * (4*pi)**(-1)) * ( (P[i]/rho[i]**2)*dWdr(r[j],r[i],h[i]) + (P[j]/rho[j]**2)*dWdr(r[j],r[i],h[j]) )
             pressure += term1
-            if r[i] > r[j]:
-                term2 = -G * (m/r[i]**2)
-                force += term2
-            else:
-                term2 = 0
-            RHS += term1 + term2
-#    if step == 25 and i == 133:
-    if step == 24 and i == 214:
-        print('total P = ',pressure)
+            RHS += term1
+    r_new = np.sort(r)
+    i_new = np.where(r_new-r[i] == 0)[0][0]
+    term2 = -(G*m)/r[i]**2
+    for j in range(i_new+1):
+#        if j<i_new:
+        force += term2
+        RHS += term2
+#        else:
+#            force += (1/2)*term2
+#            RHS += (1/2)*term2
     return RHS, force, pressure
-
-
-# Function used to determine dvdt
-#------------------------------------------------------------------------------
-#def dhdt(N,i,index,m,rho,v,h,r):
-#    RHS = 0
-#    for j in index:
-#        if j != i:
-##            RHS += -(m*h)/(3*rho[i]) * ( v[j]*dWdrp(r[j],r[i],h) + v[i]*dWdr(r[j],r[i],h) )
-#            drhodt = m * ( v[j]*dWdrp(r[j],r[i],h) + v[i]*dWdr(r[j],r[i],h) )
-#            RHS = -h * ( (1/rho[i])*drhodt + (2/r[i])*v[i] )
-#    return RHS
     
 
 # Function used to determine dudt
@@ -314,7 +302,7 @@ def dedt(N,i,index,m,P,rho,v,h,r):
     RHS = 0
     for j in index:
         if j != i:
-            RHS += m * (P[i]/rho[i]**2) * ( v[j]*dWdrp(r[j],r[i],h) + v[i]*dWdr(r[j],r[i],h) )
+            RHS += (m * (4*pi)**(-1)) * (P[i]/rho[i]**2) * ( v[j]*dWdrp(r[j],r[i],(h[i]+h[j])/2) + v[i]*dWdr(r[j],r[i],(h[i]+h[j])/2) )
     return RHS
 
 
@@ -337,14 +325,14 @@ R_vir = c*r_s
 # Set number of particles/particle mass
 #------------------------------------------------------------------------------
 M_vir = M_NFW(R_vir,r_s,rho_s)
-N = 2000
-m = 1/(4*pi) * (M_vir/N)
+N = 5000
+m = (M_vir/N)
 
 
 # Sample initial density distribution, initialize r_i/v_i/P_i
 #------------------------------------------------------------------------------
 M_samples = np.linspace(M_vir/N,M_vir,N)
-steps = 50
+steps = 500
 r = np.zeros((steps+1,N))
 v = np.zeros((steps+1,N))
 P = np.zeros((steps+1,N))
@@ -355,10 +343,64 @@ for j in range(0,N):
 
 # Initialize smoothing lengths h_i
 #------------------------------------------------------------------------------
-eta_new = 2.5
+eta_new = 1.5
 h = np.zeros((steps+1,N))
 for j in range(N):
-    h[0,j] = eta_new * (m)/(r[0,j]**2 * rho_NFW(r[0,j],r_s,rho_s))
+    h[0,j] = eta_new * m * (rho_NFW(r[0,j],r_s,rho_s) * r[0,j]**2)**(-1)
+#    h[0,j] = 0.5
+
+#n = 1000
+#r_j = r[0,10]
+#r_i = np.linspace(r[0,0],r[0,25],n)
+#kernel = [W_3S1(r_j,x,h[0,0]) for x in r_i]
+#kernel_deriv = np.zeros(n)
+#for i in range(0,n-1):
+#    kernel_deriv[i] = (kernel[i+1] - kernel[i])/(r_i[i+1] - r_i[i]) 
+#
+#inflect = 0
+#slope = (kernel[1] - kernel[0])/(r_i[1] - r_i[0])    
+#for i in range(1,n-1):
+#    slope_2 = (kernel[i+1] - kernel[i])/(r_i[i+1] - r_i[i]) 
+#    if slope_2 < slope:
+#        inflect = r_i[i]
+#        break
+#    else:
+#        slope = (kernel[i+1] - kernel[i])/(r_i[i+1] - r_i[i])
+#        
+#inflect2 = 0
+#slope = (kernel[1] - kernel[0])/(r_i[1] - r_i[0])    
+#for i in range(500,n-1):
+#    slope_2 = (kernel[i+1] - kernel[i])/(r_i[i+1] - r_i[i]) 
+#    if slope_2 > slope:
+#        inflect2 = r_i[i]
+#        break
+#    else:
+#        slope = (kernel[i+1] - kernel[i])/(r_i[i+1] - r_i[i])
+#
+#zero = 0
+#slope = (kernel[1] - kernel[0])/(r_i[1] - r_i[0])    
+#for i in range(1,n-1):
+#    slope_2 = (kernel[i+1] - kernel[i])/(r_i[i+1] - r_i[i]) 
+#    if slope_2<0 and slope>0:
+#        zero = r_i[i]
+#        break
+#    else:
+#        slope = (kernel[i+1] - kernel[i])/(r_i[i+1] - r_i[i])
+#        
+#kernel_deriv_Omang = np.array([dWdr(r_j,x,h[0,0]) for x in r_i])
+#plt.clf()
+#plt.plot(r_i,kernel,'.',label='W_3S1')
+#plt.plot(r_i,kernel_deriv,'.',label='dW/dr finite diff')
+#plt.plot(r_i,kernel_deriv_Omang*(0.98),'.',label='98% dW/dr Omang')
+#plt.axvline(zero,color='grey',linestyle='--',label='zero')
+#plt.axvline(inflect,color='grey',linestyle='--',label='inflect 1')
+#plt.axvline(inflect2,color='grey',linestyle='--',label='inflect 2')
+#plt.axhline(0,color='k',linestyle='--')
+#plt.xscale('log')
+#plt.title('W_3S1 and dW/dr for r_j='+str("{:.3f}".format(r_j))+' and h='+str(h[0,0]))
+#plt.xlabel('r')
+#plt.legend()
+#plt.show()
 
 
 # Calculate/plot SPH density profile, compare it to NFW, initialize u
@@ -368,17 +410,56 @@ neighbors = np.zeros((steps,N))
 for j in range (0,N):
     index = np.where(abs(r[0]-r[0,j]) <= 2*h[0,j])[0]       
     neighbors[0,j] = len(index)
-    for k in index:
-        rho[0,j] += m * W_3S1(r[0,k],r[0,j],h[0,j])
+#    for k in index:
+#        rho[0,j] += (m * (4*pi)**(-1)) * W_3S1(r[0,k],r[0,j],h[0,j])
+for j in range (0,N):
+    rho[0,j] = rho_NFW(r[0,j],r_s,rho_s)
+
+print(min(neighbors[0]),max(neighbors[0]),np.mean(neighbors[0]))
+
 e = np.zeros((steps+1,N))
 e[0] = (3/2)*(P[0]/rho[0])
 
-print(np.mean(neighbors[0]))
+epsilon = 1e-10
+dp_NFW = np.array([( P_NFW(x+epsilon,r_s,rho_s) - P_NFW(x,r_s,rho_s) ) * (epsilon)**(-1) for x in r[0]])
+dp_SPH = np.zeros(N)
+for j in range(N):
+    index = np.where(abs(r[0]-r[0,j]) <= 2*h[0,j])[0] 
+    dp_SPH[j] = dvdt(N,j,index,m,P[0],rho[0],r[0],h[0])[2]
+
+plt.clf()
+plt.loglog(r[0],abs(dp_SPH),'.',label='SPH abs (h ='+str(h[0,0])+')')
+plt.loglog(r[0],abs(dp_NFW),color='k',label='NFW abs')
+plt.title('dP/dr for NFW vs. SPH (N=5000)')
+plt.xlabel('r')
+plt.legend()
+plt.show()
+
+#forces = np.zeros(N)
+#pressures = np.zeros(N)
+#for j in range(0,N):
+#    index = np.where(abs(r[0]-r[0,j]) <= 2*h[0,j])[0]
+#    a, forces[j], pressures[j] = dvdt(N,j,index,m,P[0],rho[0],r[0],h[0])
+#pressures[4990:N] = -0.875*forces [4990:N]
+  
+#F_NFW = np.array([-G*M_NFW(x,r_s,rho_s)/x**2 for x in r[0]])
+#plt.clf()
+#plt.loglog(r[0],abs(p_NFW),linewidth=2,label='NFW pressure abs')
+#plt.loglog(r[0],abs(pressures),'.',label='SPH pressures')
+#plt.loglog(r[0],abs(F_NFW),label='NFW force abs')
+#plt.plot(r[0],forces,'.',label='SPH forces (N ='+str(N)+')')
+#plt.plot(r[0],forces+pressures,'.',label='Sum of terms')
+#plt.axhline(0,color='k',linestyle='--')
+#plt.xscale('log')
+#plt.xlabel('r')
+#plt.title('Force/pressure terms for NFW vs. SPH (h=0.05)')
+#plt.legend()
+#plt.show()
 
 
-# Begin time-evolution
-#------------------------------------------------------------------------------
-dt = 0.001
+## Begin time-evolution
+##------------------------------------------------------------------------------
+dt = 0.0001
 t_elapsed = 0
 forces = np.zeros((steps,N))
 pressures = np.zeros((steps,N))
@@ -387,33 +468,43 @@ print('step =',0,'  r_0 =', "{:.4f}".format(r[0,p_index]),'  rho_0 =',"{:e}".for
 for i in range (0,steps):
     for j in range(0,N):
 #         Update r, v, and u
-        index = np.where(abs(r[i]-r[i,j]) <= 2*h[i,j])[0]
-        neighbors[i,j] = len(index)
-        a, forces[i,j], pressures[i,j] = dvdt(i,N,j,index,m,P[i],rho[i],r[i],h[i,j])
-        v[i+1,j] = v[i,j] + a*dt
-        r[i+1,j] = r[i,j] + v[i,j]*dt
-        if r[i+1,j] < 0:
-            print(i,j,r[i,j],v[i,j]*dt)
-            r[i+1,j] = 1e-8
-        e[i+1,j] = e[i,j] + dedt(N,j,index,m,P[i],rho[i],v[i],h[i,j],r[i])*dt
+        if j <= N-20:
+            index = np.where(abs(r[i]-r[i,j]) <= 2*h[i,j])[0]
+            neighbors[i,j] = len(index)
+            a, forces[i,j], pressures[i,j] = dvdt(N,j,index,m,P[i],rho[i],r[i],h[i])
+            v[i+1,j] = v[i,j] + a*dt
+            r[i+1,j] = r[i,j] + v[i,j]*dt
+            if r[i+1,j] < 0:
+                print(i,j)
+                r[i+1,j] = np.abs(r[i+1,j])
+            e[i+1,j] = e[i,j] + dedt(N,j,index,m,P[i],rho[i],v[i],h[i],r[i])*dt
+        else:
+            v[i+1,j] = v[i,j]
+            r[i+1,j] = r[i,j]
+            e[i+1,j] = e[i,j]
     for j in range(0,N):
 #         Update rho, P, and h
-        index = np.where(abs(r[i]-r[i,j]) <= 2*h[i,j])[0]
-        rho[i+1,j] = get_rho(N,j,index,r[i+1],h[i,j],m)
-        P[i+1,j] = (2/3) * rho[i+1,j] * e[i+1,j]
-#        h[i+1,j] = h[i,j] + dhdt(N,i,index,m,rho[i],v[i],h[i,j],r[i])*dt
+        if j <= N-20:
+            index = np.where(abs(r[i]-r[i,j]) <= 2*h[i,j])[0]
+            rho[i+1,j] = get_rho(N,j,index,r[i+1],h[i],m)
+            P[i+1,j] = (2/3) * rho[i+1,j] * e[i+1,j]
+        else:
+            rho[i+1,j] = rho[i,j]
+            P[i+1,j] = P[i,j]   
         h[i+1,j] = h[i,j]
     t_elapsed += dt
     print('step =',i+1,'  r_0 =', "{:.4f}".format(r[i+1,p_index]),'  rho_0 =',"{:e}".format(rho[i+1,p_index]),'  h_0 =',"{:.3f}".format(h[i+1,p_index]),sep = '\t')
 
 
-np.savetxt('neighbors.csv', neighbors, delimiter=',')
+
 plt.clf()
-for j in range(10):
-#    plt.plot(r[0:steps,j],linestyle='--', marker='o',markersize=3,label='Particle '+str(j))
-#    plt.plot(forces[0:steps,j],linestyle='--', marker='o',markersize=3,label='Particle '+str(j)+' force')
-#    plt.plot(pressures[0:steps,j],linestyle='--', marker='o',markersize=3,label='Particle '+str(j)+' pressure')
-#plt.loglog(r[-1],[rho_NFW(x,r_s,rho_s) for x in r[-1]])
-#plt.loglog(r[-1],rho[-1],'.')
+for j in range(0,10):
+    plt.plot(r[0:steps+1,j],linestyle='--', marker='o',markersize=3,label='Particle '+str(j))
+#    plt.plot(forces[0:steps+1,j],linestyle='--', marker='o',markersize=3,label='Particle '+str(j)+' force')
+#    plt.plot(pressures[0:steps+1,j],linestyle='--', marker='o',markersize=3,label='Particle '+str(j)+' pressure')
+#r_vals = np.linspace(min(r[-1]),max(r[-1]),1000)
+#plt.loglog(r_vals,[rho_NFW(x,r_s,rho_s) for x in r_vals],label='NFW')
+#plt.loglog(r[0],rho[0],'.',label='SPH i')
+#plt.loglog(r[-1],rho[-1],'.',label='SPH f')
 plt.legend(loc='upper right', bbox_to_anchor=(1.1, 1))
 plt.show()
